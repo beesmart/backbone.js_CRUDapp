@@ -1,0 +1,250 @@
+<!-- Annotated with 8 Steps (I called them jobs). To help me understand what's going on in this CRUD app -->
+<!-- Original code by Thomas Davis (https://github.com/thomasdavis/backbonetutorials/tree/gh-pages/videos/beginner) -->
+<!-- The code has no XSS functions so consider this when using the code -->
+
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Backbone tut</title>
+	<link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.1.1/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container">
+	<h1>User Manager</h1>
+	<hr />
+	<div class="page"></div>
+</div>
+
+
+
+
+<!-- 5.4 Creating our template - cant comment inside the template, made eveything go wrong 
+After creating the table we add a new route /new-->
+<!-- 8.2 - Add a button for editing -->
+<script type="text/template" id="user-list-template">
+
+	
+<a href="#/new" class="btn btn-primary">New User</a>
+<hr />
+<table class="table striped">
+	<thead>
+		<tr>
+			<th>First Name</th>
+			<th>Last Name</th>
+			<th>Age</th>
+			<th></th>
+		</tr>
+	</thead>
+	<tbody>
+		<% _.each(users, function(user) { %>
+			<tr>
+				<td><%= user.get('firstname') %></td>
+				<td><%= user.get('lastname') %></td>
+				<td><%= user.get('age') %></td>
+				<td><a href="#/edit/<%= user.id %>" class="btn">Edit</a></td>
+			</tr>
+		<% }); %>
+
+	</tbody>
+</table>
+	
+</script>
+	
+<!-- 6.3 Create our form for user content submission -->
+<!-- 8.6 - Update our labels to say "UPDATE" if we're updating -->
+<script type="text/template" id="edit-user-template">
+	
+	
+ <form class="edit-user-form">
+      <legend><%= user ? 'Edit' : 'New' %> User</legend>
+        <label>First Name</label>
+        <input name="firstname" type="text" value="<%= user ? user.get('firstname') : '' %>">
+        <label>Last Name</label>
+        <input name="lastname" type="text" value="<%= user ? user.get('lastname') : '' %>">
+        <label>Age</label>
+        <input name="age" type="text" value="<%= user ? user.get('age') : '' %>">
+        <hr />
+       <button type="submit" class="btn"><%= user ? 'Update' : 'Create' %></button>
+       <% if(user) { %>
+        <input type="hidden" name="id" value="<%= user.id %>" />
+        <button data-user-id="<%= user.id %>" class="btn btn-danger delete">Delete</button>
+       <% }; %>
+    </form>
+
+</script>
+
+<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.8.2/jquery.min.js" type="text/javascript"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.2/underscore-min.js" type="text/javascript"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/backbone.js/0.9.2/backbone-min.js"></script>
+<script>
+	
+
+	// Job 5 -----------------------------------------------------------------------------------------
+		/* try not to get lost. Here's a pasted ajax pre filter. We're working on localhost but we want
+		to connect to a remote host somewhere on the internet. So we use a prefilter to hook in before the request 
+		is sent and prepend our custom origin server. */
+	$.ajaxPrefilter( function( options, originalOptions, jqXHR ) {
+ 	  options.url = 'http://backbonejs-beginner.herokuapp.com' + options.url;
+	});
+
+
+	// Job 7 -----------------------------------------------------------------------------------
+	 /* By default jQuery doesn't allow us to convert our forms into Javascript Objects, someone wrote this snippet on Stack Overflow that I have been using for years. Simply call it via $(form).serializeObject() and get a object returned. */
+	$.fn.serializeObject = function() {
+	  var o = {};
+	  var a = this.serializeArray();
+	  $.each(a, function() {
+	      if (o[this.name] !== undefined) {
+	          if (!o[this.name].push) {
+	              o[this.name] = [o[this.name]];
+	          }
+	          o[this.name].push(this.value || '');
+	      } else {
+	          o[this.name] = this.value || '';
+	      }
+	  });
+	  return o;
+	};
+
+
+	//Job 4 ------------------------------------------------------------------------------------------
+		// Collections time! Now we interact with the backend to deal with the data 
+		var Users = Backbone.Collection.extend({
+
+			url: '/users'
+		});
+
+	//Job 8 ------------------------------------------------------------------------------------------
+
+		// The model can post the user submit data and auto append an ID
+		var User = Backbone.Model.extend({
+
+			urlRoot: '/users'
+		});
+
+	//Job 2 ------------------------------------------------------------------------------------------
+		// Now we create our view, this is where backbone interacts with the DOM visually
+		var UserList = Backbone.View.extend({
+			// heres the html object we'll be putting our backbone goodness into. el = element
+			el: '.page',
+			// each view needs a render function that does the legwork. THIS.$EL refers to ".page"
+			render: function() {
+				//5.1 - Grab the user data. Instantiate a new user collection and fetch
+				// 5.2 - Oh no. this.$el returns an error. now "this" has lost it's scope because it's nested inside an
+				//anon function. But wait, a quick hack, assign this to another variable:
+				var that = this;
+				var users = new Users();
+				users.fetch({
+					success: function (users) {
+						/*5.3 - time to bring in an underscores template to display the data. pass the users param so we can work with it 
+						5.5 - Pass in our #html template as a jQ obj into our temp variable
+						5.6 - our users collection goes in there too with the model - whatever is passed in is availible in our template,
+						I think?!  */
+						var template = _.template($('#user-list-template').html(), {users: users.models});
+						that.$el.html(template);
+					}
+				})
+				
+			}
+
+		});
+	/*6.2 - Let's creat our edituser view and render it. We also connect the template - (no model passed in. why? well we're)
+	taking input from the user not asking for anything FROM the server. We use "this" as we have scope here.
+	8.4 - Now we need conditionals to check if user exists. Add options param. We add inside our IF, a new model based on the 
+	ID contents of the URL*/
+		var EditUser =	Backbone.View.extend({
+			el: '.page',
+			render: function (options){
+				var that = this;
+				if(options.id){
+					var user = new User({id: options.id});
+					that.user.fetch({
+						// 8.5 - We pass in our user obj
+						success: function (user){
+							var template = _.template($('#edit-user-template').html(), {user: user});
+							that.$el.html(template);
+						}
+					}) 
+				} else {
+					var template = _.template($('#edit-user-template').html(), {user: null});
+					this.$el.html(template);
+				}
+				
+			},
+	//6.4 -  Now we listen for a user submit on our form and fire the function "save user"
+	// 8.7 - Create a delet button
+			events: {
+				'submit .edit-user-form': 'saveUser',
+				'click .delete': 'deleteUser'
+			
+			},
+	//7.1 - Use ev (native js obj)
+	// 8.1 - Instantiate a new User Obj and save to server. Pass the params of userdetails and a success function that navigates 
+	// to home '' and saves state. explicitly tell it to trigger. 
+
+			saveUser: function (ev) {
+				var userDetails = $(ev.currentTarget).serializeObject();
+				var user = new User();
+				user.save(userDetails, {
+					success: function (user) {
+						// console.log(user);
+						router.navigate('', {trigger: true});
+					}
+				})
+			
+				return false;
+			},
+			deleteUser: function (ev) {
+				this.user.destroy({
+					success: function() {
+						router.navigate('', {trigger: true});
+					}
+				})
+				return false;
+			}
+
+		})
+
+	// Job 1 -----------------------------------------------------------------------------------------
+		// Let's first create the router object and specify some routes. Let's trigger our index (home)
+	//Job 6 ----------------------------------------
+		// a new button for new users needs a new router
+		// 8.3 - new route for edit
+		var Router = Backbone.Router.extend({
+			routes: {
+				'': 'home',
+				'new': 'editUser',
+				'edit/:id': 'editUser'
+			}
+		});
+
+	// Job 3 ---------------------------------
+		// create  a new instance of our userlist view/obj
+		// 6.3 - and our edituser view
+		var UserList = new UserList();
+		var editUser = new EditUser();
+		//create a new instance of this router
+		var router = new Router();
+		// now listen for the routes by hooking jquery into an on function and logging it(3 - show the rendered userlist)
+		router.on('route:home', function () {
+			UserList.render();
+		});
+		// 6.1 - Now add our "hook"
+		// 8.4 - We're piggybacking on the edituser function, add the ID param and new render ID params
+		router.on('route:editUser', function (id) {
+			editUser.render({id: id});
+		});
+		// Oh wait, we have to start backbone history else nothing happens. Tells backbone to start listening to our url.
+		Backbone.history.start();
+	</script>
+
+
+</body>
+</html>
+
+
+<!-- 
+Thomas used an old version, use this now to make work:
+	var template = _.template($('#user-list-template').html());
+	 that.$el.html(template({users: users.models})); -->
